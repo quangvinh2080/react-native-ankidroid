@@ -81,6 +81,14 @@ export class AnkiDroid {
   }
 
   /**
+   * Update note field value
+   * @return updated note result
+   */
+  static async updateNoteFieldValue(noteId, fieldName, newValue): Promise<any> {
+    return AnkiDroidModule.updateNoteFieldValue(noteId, fieldName, newValue);
+  }
+
+  /**
    * Add tag
    * @return result
    */

@@ -148,6 +148,72 @@ public class AnkiDroidModule extends ReactContextBaseJavaModule {
   }
 
   /**
+   * Update a note field value
+   */
+  @ReactMethod
+  public void updateNoteFieldValue(String noteId, String fieldName, String newFieldValue, Promise promise) {
+    ContentResolver cr = reactContext.getContentResolver();
+    ContentValues values = new ContentValues();
+
+    Uri noteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+    final Cursor cursor = cr.query(noteUri,
+      null,  // projection
+      null,  // selection is ignored for this URI
+      null,  // selectionArgs is ignored for this URI
+      null   // sortOrder is ignored for this URI
+    );
+    if (cursor.moveToFirst()) {
+      String fields = cursor.getString(cursor.getColumnIndex(FlashCardsContract.Note.FLDS));
+      String[] fieldValues = fields.split("\\x1f");
+      String[] fieldNames = {};
+      long modelId = cursor.getLong(cursor.getColumnIndex(FlashCardsContract.Note.MID));
+      Uri modelUri = Uri.withAppendedPath(FlashCardsContract.Model.CONTENT_URI, Long.toString(modelId));
+
+      final Cursor modelCursor = cr.query(modelUri,
+        null,  // projection
+        null,  // selection is ignored for this URI
+        null,  // selectionArgs is ignored for this URI
+        null   // sortOrder is ignored for this URI
+      );
+
+      if (modelCursor.moveToFirst()) {
+        String fieldNamesStr = modelCursor.getString(modelCursor.getColumnIndex(FlashCardsContract.Model.FIELD_NAMES));
+        fieldNames = fieldNamesStr.split("\\x1f");
+      }
+
+      int fieldNameIndex = Arrays.asList(fieldNames).indexOf(fieldName);
+
+      String[] newFieldValues = new String[fieldNames.length];
+
+      for(int i = 0; i < fieldNames.length; i++) {
+        if (i == fieldNameIndex) {
+          newFieldValues[i] = newFieldValue;
+        } else if (i >= fieldValues.length) {
+          newFieldValues[i] = "";
+        } else {
+          newFieldValues[i] = fieldValues[i];
+        }
+      }
+
+      Uri updateNoteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+      values.put(FlashCardsContract.Note.FLDS, this.joinFields(newFieldValues));
+      int updateCount = cr.update(updateNoteUri, values, null, null);
+      promise.resolve(updateCount);
+    }
+  }
+
+  private String joinFields(String[] list) {
+    StringBuilder result = new StringBuilder(128);
+    for (int i = 0; i < list.length - 1; i++) {
+      result.append(list[i]).append("\u001f");
+    }
+    if (list.length > 0) {
+      result.append(list[list.length - 1]);
+    }
+    return result.toString();
+  }
+
+  /**
    * Add tag for note
    */
   @ReactMethod
