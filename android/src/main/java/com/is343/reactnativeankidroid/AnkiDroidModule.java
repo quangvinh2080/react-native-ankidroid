@@ -229,18 +229,23 @@ public class AnkiDroidModule extends ReactContextBaseJavaModule {
       null   // sortOrder is ignored for this URI
     );
 
-    if (cursor.moveToFirst()) {
-      String tags = cursor.getString(cursor.getColumnIndex(FlashCardsContract.Note.TAGS));
+    try {
+      if (cursor.moveToFirst()) {
+        String tags = cursor.getString(cursor.getColumnIndex(FlashCardsContract.Note.TAGS));
 
-      // add the new tag at the end
-      String newTags = tags + " " + tagName;
+        // add the new tag at the end
+        String newTags = tags + " " + tagName;
 
-      Uri updateNoteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
-      values = new ContentValues();
-      values.put(FlashCardsContract.Note.TAGS, newTags);
-      int updateCount = cr.update(updateNoteUri, values, null, null);
-      promise.resolve(updateCount);
+        Uri updateNoteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+        values = new ContentValues();
+        values.put(FlashCardsContract.Note.TAGS, newTags);
+        int updateCount = cr.update(updateNoteUri, values, null, null);
+        promise.resolve(updateCount);
+      }
+    } finally {
+      cursor.close();
     }
+
   }
 
   /**
@@ -259,17 +264,21 @@ public class AnkiDroidModule extends ReactContextBaseJavaModule {
             null   // sortOrder is ignored for this URI
     );
 
-    if (cursor.moveToFirst()) {
-      String tags = cursor.getString(cursor.getColumnIndex(FlashCardsContract.Note.TAGS));
+    try {
+      if (cursor.moveToFirst()) {
+        String tags = cursor.getString(cursor.getColumnIndex(FlashCardsContract.Note.TAGS));
 
-      // add the new tag at the end
-      String newTags = tags.replace(" " + tagName, "");
+        // add the new tag at the end
+        String newTags = tags.replace(" " + tagName, "");
 
-      Uri updateNoteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
-      values = new ContentValues();
-      values.put(FlashCardsContract.Note.TAGS, newTags);
-      int updateCount = cr.update(updateNoteUri, values, null, null);
-      promise.resolve(updateCount);
+        Uri updateNoteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+        values = new ContentValues();
+        values.put(FlashCardsContract.Note.TAGS, newTags);
+        int updateCount = cr.update(updateNoteUri, values, null, null);
+        promise.resolve(updateCount);
+      }
+    } finally {
+      cursor.close();
     }
   }
 
