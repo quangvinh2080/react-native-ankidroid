@@ -1,7 +1,11 @@
 
 package com.is343.reactnativeankidroid;
 
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
+
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.Arrays;
@@ -10,6 +14,9 @@ import java.util.Map;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.ListIterator;
+
+import android.database.Cursor;
+import android.net.Uri;
 import android.util.SparseArray;
 import android.content.SharedPreferences;
 
@@ -28,6 +35,9 @@ import com.facebook.react.bridge.Arguments;
 
 import com.ichi2.anki.api.AddContentApi;
 import com.ichi2.anki.api.NoteInfo;
+import com.ichi2.anki.FlashCardsContract;
+
+import org.json.JSONObject;
 
 import static com.ichi2.anki.api.AddContentApi.READ_WRITE_PERMISSION;
 
@@ -65,6 +75,210 @@ public class AnkiDroidModule extends ReactContextBaseJavaModule {
       promise.resolve(READ_WRITE_PERMISSION);
     } catch (Exception e) {
       promise.reject(e.toString());
+    }
+  }
+
+  /**
+   * Return all notes with query
+   */
+  @ReactMethod
+  public void findNotes(String query, Promise promise) {
+    ContentResolver cr = reactContext.getContentResolver();
+    Cursor notesCursor = cr.query(FlashCardsContract.Note.CONTENT_URI, null, query, null, null);
+    String[] fieldValues = {};
+    String[] fieldNames = {};
+
+    WritableArray allNotes = new WritableNativeArray();
+
+    if (notesCursor == null) {
+      promise.resolve(null);
+    } else {
+      try {
+        while (notesCursor.moveToNext()) {
+          WritableMap note = Arguments.createMap();
+
+          long modelId = notesCursor.getLong(notesCursor.getColumnIndex(FlashCardsContract.Note.MID));
+          note.putString("mid", Long.toString(modelId));
+
+          String nodeId = notesCursor.getString(notesCursor.getColumnIndex(FlashCardsContract.Note._ID));
+          note.putString("id", nodeId);
+
+          // Get fields value
+          String fields = notesCursor.getString(notesCursor.getColumnIndex(FlashCardsContract.Note.FLDS));
+          fieldValues = fields.split("\\x1f");
+
+          // Get fields name
+          Uri modelUri = Uri.withAppendedPath(FlashCardsContract.Model.CONTENT_URI, Long.toString(modelId));
+
+          final Cursor modelCursor = cr.query(modelUri,
+            null,  // projection
+            null,  // selection is ignored for this URI
+            null,  // selectionArgs is ignored for this URI
+            null   // sortOrder is ignored for this URI
+          );
+
+          if ( modelCursor.moveToFirst() ) {
+            String fieldNamesStr = modelCursor.getString(modelCursor.getColumnIndex(FlashCardsContract.Model.FIELD_NAMES));
+            fieldNames = fieldNamesStr.split("\\x1f");
+          }
+
+          // create field name/value map
+          WritableMap fieldMap = Arguments.createMap();
+          for(int i = 0; i < fieldNames.length; i++) {
+            String fieldName = fieldNames[i];
+            String fieldValue = "";
+            if (i < fieldValues.length ) {
+              fieldValue = fieldValues[i];
+            }
+
+            fieldMap.putString(fieldName, fieldValue);
+          }
+
+          note.putMap("fields", fieldMap);
+
+          String tags = notesCursor.getString(notesCursor.getColumnIndex(FlashCardsContract.Note.TAGS));
+          note.putString("tags", tags);
+          allNotes.pushMap(note);
+        }
+      } finally {
+        notesCursor.close();
+      }
+      promise.resolve(allNotes);
+    }
+  }
+
+  /**
+   * Update a note field value
+   */
+  @ReactMethod
+  public void updateNoteFieldValue(String noteId, String fieldName, String newFieldValue, Promise promise) {
+    ContentResolver cr = reactContext.getContentResolver();
+    ContentValues values = new ContentValues();
+
+    Uri noteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+    final Cursor cursor = cr.query(noteUri,
+      null,  // projection
+      null,  // selection is ignored for this URI
+      null,  // selectionArgs is ignored for this URI
+      null   // sortOrder is ignored for this URI
+    );
+    if (cursor.moveToFirst()) {
+      String fields = cursor.getString(cursor.getColumnIndex(FlashCardsContract.Note.FLDS));
+      String[] fieldValues = fields.split("\\x1f");
+      String[] fieldNames = {};
+      long modelId = cursor.getLong(cursor.getColumnIndex(FlashCardsContract.Note.MID));
+      Uri modelUri = Uri.withAppendedPath(FlashCardsContract.Model.CONTENT_URI, Long.toString(modelId));
+
+      final Cursor modelCursor = cr.query(modelUri,
+        null,  // projection
+        null,  // selection is ignored for this URI
+        null,  // selectionArgs is ignored for this URI
+        null   // sortOrder is ignored for this URI
+      );
+
+      if (modelCursor.moveToFirst()) {
+        String fieldNamesStr = modelCursor.getString(modelCursor.getColumnIndex(FlashCardsContract.Model.FIELD_NAMES));
+        fieldNames = fieldNamesStr.split("\\x1f");
+      }
+
+      int fieldNameIndex = Arrays.asList(fieldNames).indexOf(fieldName);
+
+      String[] newFieldValues = new String[fieldNames.length];
+
+      for(int i = 0; i < fieldNames.length; i++) {
+        if (i == fieldNameIndex) {
+          newFieldValues[i] = newFieldValue;
+        } else if (i >= fieldValues.length) {
+          newFieldValues[i] = "";
+        } else {
+          newFieldValues[i] = fieldValues[i];
+        }
+      }
+
+      Uri updateNoteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+      values.put(FlashCardsContract.Note.FLDS, this.joinFields(newFieldValues));
+      int updateCount = cr.update(updateNoteUri, values, null, null);
+      promise.resolve(updateCount);
+    }
+  }
+
+  private String joinFields(String[] list) {
+    StringBuilder result = new StringBuilder(128);
+    for (int i = 0; i < list.length - 1; i++) {
+      result.append(list[i]).append("\u001f");
+    }
+    if (list.length > 0) {
+      result.append(list[list.length - 1]);
+    }
+    return result.toString();
+  }
+
+  /**
+   * Add tag for note
+   */
+  @ReactMethod
+  public void addTag(String noteId, String tagName, Promise promise) {
+    ContentResolver cr = reactContext.getContentResolver();
+    ContentValues values = new ContentValues();
+    Uri noteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+
+    final Cursor cursor = cr.query(noteUri,
+      null,  // projection
+      null,  // selection is ignored for this URI
+      null,  // selectionArgs is ignored for this URI
+      null   // sortOrder is ignored for this URI
+    );
+
+    try {
+      if (cursor.moveToFirst()) {
+        String tags = cursor.getString(cursor.getColumnIndex(FlashCardsContract.Note.TAGS));
+
+        // add the new tag at the end
+        String newTags = tags + " " + tagName;
+
+        Uri updateNoteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+        values = new ContentValues();
+        values.put(FlashCardsContract.Note.TAGS, newTags);
+        int updateCount = cr.update(updateNoteUri, values, null, null);
+        promise.resolve(updateCount);
+      }
+    } finally {
+      cursor.close();
+    }
+
+  }
+
+  /**
+   * Remove tag from note
+   */
+  @ReactMethod
+  public void removeTag(String noteId, String tagName, Promise promise) {
+    ContentResolver cr = reactContext.getContentResolver();
+    ContentValues values = new ContentValues();
+    Uri noteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+
+    final Cursor cursor = cr.query(noteUri,
+            null,  // projection
+            null,  // selection is ignored for this URI
+            null,  // selectionArgs is ignored for this URI
+            null   // sortOrder is ignored for this URI
+    );
+
+    try {
+      if (cursor.moveToFirst()) {
+        String tags = cursor.getString(cursor.getColumnIndex(FlashCardsContract.Note.TAGS));
+
+        // add the new tag at the end
+        String newTags = tags.replace(" " + tagName, "");
+
+        Uri updateNoteUri = Uri.withAppendedPath(FlashCardsContract.Note.CONTENT_URI, noteId);
+        values = new ContentValues();
+        values.put(FlashCardsContract.Note.TAGS, newTags);
+        int updateCount = cr.update(updateNoteUri, values, null, null);
+        promise.resolve(updateCount);
+      }
+    } finally {
+      cursor.close();
     }
   }
 

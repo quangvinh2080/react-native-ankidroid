@@ -73,6 +73,38 @@ export class AnkiDroid {
   }
 
   /**
+   * Find notes
+   * @return all notes match query
+   */
+  static async findNotes(query): Promise<any> {
+    return AnkiDroidModule.findNotes(query);
+  }
+
+  /**
+   * Update note field value
+   * @return updated note result
+   */
+  static async updateNoteFieldValue(noteId, fieldName, newValue): Promise<any> {
+    return AnkiDroidModule.updateNoteFieldValue(noteId, fieldName, newValue);
+  }
+
+  /**
+   * Add tag
+   * @return result
+   */
+   static async addTag(noteId, tagName): Promise<any> {
+    return AnkiDroidModule.addTag(noteId, tagName);
+  }
+
+  /**
+   * Remove tag
+   * @return result
+   */
+   static async removeTag(noteId, tagName): Promise<any> {
+    return AnkiDroidModule.removeTag(noteId, tagName);
+  }
+
+  /**
    * Check if the AnkiDroid API is available on the phone
    * @return `true` if the API is available to use
    */
